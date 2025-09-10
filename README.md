@@ -240,8 +240,7 @@ make
 linuxVirtualization/
 ├── app
 │   ├── bin
-│   │   ├── lvirtfront-0.1-arm64-v8a_armeabi-v7a-debug.apk #app builds
-│   │   └── lvirtfront-0.1-arm64-v8a_armeabi-v7a-release.aab
+│   │   ├── ##your compiled apks
 │   ├── buildozer.spec #buildozer config file
 │   ├── certs
 │   │   └── ca.crt # client cert (auto-generated)
