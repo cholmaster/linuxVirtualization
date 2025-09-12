@@ -115,6 +115,7 @@ netfilter-persistent save
 #ausearch -c 'nginx' --raw | audit2allow -M my-nginx
 #semodule -X 300 -i my-nginx.pp
 systemctl restart NetworkManager
+make prepare
 ./utils/make_base_images.sh
 make
 ./install_svc.sh
