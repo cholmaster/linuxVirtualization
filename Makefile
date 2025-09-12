@@ -3,5 +3,5 @@ all:
 	go build -o incuspeed
 prepare:
 	cd tools
-	go build -o manage_ssh
+	go build -o tools/manage_ssh
 	cd ..
