@@ -29,6 +29,7 @@ from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.list import MDList
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.filemanager import MDFileManager
+from kivymd.uix.menu import MDDropdownMenu
 
 # Permission handling for Android
 try:
@@ -119,11 +120,15 @@ class MainScreen(Screen):
         self.username_input = MDTextField(hint_text="Username", size_hint_x=None, width=central_layout.width)
         self.password_input = MDTextField(hint_text="Password", password=True, size_hint_x=None, width=central_layout.width)
         self.container_tag = MDTextField(hint_text="Container Label (e.g., my-web-app)", size_hint_x=None, width=central_layout.width, max_text_length=10)
-        self.distro = MDTextField(hint_text="Distro:Version (e.g., ubuntu:22.04)", size_hint_x=None, width=central_layout.width)
+        
+        self.distro_button = MDRaisedButton(text="Select Distro", on_release=self.open_distro_menu, size_hint_x=None, width=central_layout.width)
+        self.distro_menu = MDDropdownMenu(caller=self.distro_button, items=[], width_mult=4)
+        self.selected_distro = None
+
         central_layout.add_widget(self.url_input)
         central_layout.add_widget(self.username_input)
         central_layout.add_widget(self.password_input)
-        central_layout.add_widget(self.distro)
+        central_layout.add_widget(self.distro_button)
         central_layout.add_widget(self.container_tag)
         buttons_container = MDBoxLayout(
             orientation='vertical',
@@ -149,6 +154,18 @@ class MainScreen(Screen):
         self.add_widget(layout)
         self.containers = {}
         self.is_creating_container = False
+        self.fetch_images()
+
+    def open_distro_menu(self, *args):
+        self.distro_menu.open()
+
+    def set_distro(self, distro_name):
+        self.selected_distro = distro_name
+        self.distro_button.text = distro_name
+        self.distro_menu.dismiss()
+
+    def fetch_images(self):
+        self.send_request("images")
 
     def go_to_manage(self, instance):
         if self.is_creating_container:
@@ -189,6 +206,9 @@ class MainScreen(Screen):
             return
         if not hasattr(self.manager, 'user_info') or 'username' not in self.manager.user_info or 'key' not in self.manager.user_info:
             self.result_label.text = "User info missing. Register or log in again."
+            return
+        if not self.selected_distro:
+            self.result_label.text = "Please select a distribution."
             return
         self.is_creating_container = True
         self.create_container_button.disabled = True
@@ -246,9 +266,8 @@ class MainScreen(Screen):
                 return
             key = self.manager.user_info['key']
             encrypted_password, password_iv = CryptoHelper.encrypt(password, key)
-            distroinfo = self.distro.text.strip()
-            distroinfo = ''.join(c for c in distroinfo if re.match(r'[a-z0-9:.]', c))
-            self.distro.text = distroinfo
+            
+            distroinfo = self.selected_distro
             distro_and_version = distroinfo.split(":")
             if len(distro_and_version) != 2 or not distro_and_version[0] or not distro_and_version[1]:
                 self.result_label.text = "Invalid distro:version format. Use 'distro:version'."
@@ -290,6 +309,9 @@ class MainScreen(Screen):
                 'Content-Type': 'application/octet-stream'
             }
             data_to_send = file_path
+        elif endpoint == "images":
+            headers = {}
+            data_to_send = None
         else:
             if not hasattr(self.manager, 'user_info'):
                 self.result_label.text = "User info not found. Register or log in."
@@ -306,6 +328,7 @@ class MainScreen(Screen):
         response_text = ""
         success = False
         containers_data = None
+        images_data = None
         try:
 
             main_screen = self.manager.get_screen("main")
@@ -330,6 +353,11 @@ class MainScreen(Screen):
                 response = requests.post(f"{SERVER_URL}/{endpoint}", data=data_to_send, headers=headers, verify=cert_path)
                 response.raise_for_status()
                 response_text = response.text
+                success = True
+            elif endpoint == "images":
+                response = requests.get(f"{SERVER_URL}/{endpoint}", verify=cert_path)
+                response.raise_for_status()
+                images_data = json.loads(response.text)
                 success = True
             else:
                 response = requests.post(f"{SERVER_URL}/{endpoint}", json=data_to_send, headers=headers, verify=cert_path)
@@ -358,9 +386,9 @@ class MainScreen(Screen):
             response_text = f"Unexpected error: {e}"
             Logger.error(response_text)
         finally:
-            Clock.schedule_once(lambda dt: self._update_ui_after_request(endpoint, success, response_text, containers_data, selected_tag), 0)
+            Clock.schedule_once(lambda dt: self._update_ui_after_request(endpoint, success, response_text, containers_data, selected_tag, images_data), 0)
 
-    def _update_ui_after_request(self, endpoint, success, message, containers_data, selected_tag):
+    def _update_ui_after_request(self, endpoint, success, message, containers_data, selected_tag, images_data=None):
         current_screen = self.manager.current_screen
         manage_screen = self.manager.get_screen("manage")
         if endpoint == "create":
@@ -376,6 +404,16 @@ class MainScreen(Screen):
                     manage_screen.feedback_label.text = "Container list refreshed."
                     manage_screen.is_processing_actions = False
                     manage_screen._toggle_action_buttons_state(True)
+            elif endpoint == "images" and images_data is not None:
+                menu_items = [
+                    {
+                        "viewclass": "OneLineListItem",
+                        "text": f"{image}",
+                        "on_release": lambda x=f"{image}": self.set_distro(x),
+                    } for image in images_data
+                ]
+                self.distro_menu = MDDropdownMenu(caller=self.distro_button, items=menu_items, width_mult=4)
+                self.result_label.text = "Image list refreshed."
             elif endpoint == "register":
                 self.result_label.text = "Registration successful!"
             elif endpoint == "unregister":

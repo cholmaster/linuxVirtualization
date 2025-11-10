@@ -4,7 +4,7 @@ incus image list --format csv | tail -n +1 | awk -F',' '{alias=$1; fingerprint=$
 
 echo "package incus_unit
 
-var baseImages = map[string]string{
+var BaseImages = map[string]string{
 $(cat temp_map.txt)
 }" > linux_virt_unit/incus_unit/base_images.go
 
